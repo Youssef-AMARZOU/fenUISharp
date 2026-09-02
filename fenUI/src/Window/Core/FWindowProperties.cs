@@ -45,7 +45,7 @@ namespace FenUISharp
             }
             get => _alwaysOnTop;
         }
-        private bool _alwaysOnTop = true; // Default true: Dynamic Island must be visible without minimizing other windows
+        private bool _alwaysOnTop = false; // Default false: click other window -> island behind; click island -> bring to front
 
         public void ReassertTopmost()
         {

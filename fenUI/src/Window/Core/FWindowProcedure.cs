@@ -135,37 +135,22 @@ namespace FenUISharp
                     _isSizing = false;
                     return IntPtr.Zero;
 
-                // When the focus of the window is killed
+                // When the focus of the window is killed - click on other window -> go behind
                 case (int)WindowMessages.WM_KILLFOCUS:
                     Window._isDirty = true;
-
-                    // Delay by one frame
                     Window.Properties._isFocused = false;
-
-                    // Notify that focus was lost
+                    // Click other window -> island behind (not always on top)
+                    Window.Properties.AlwaysOnTop = false;
                     Window.LogicDispatcher?.Invoke(() => Window.Callbacks.OnFocusLost?.Invoke());
                     return IntPtr.Zero;
 
-                // When the window gains focus
+                // When the window gains focus - click on island -> come to front
                 case (int)WindowMessages.WM_SETFOCUS:
                     Window._isDirty = true;
                     Window.Properties._isFocused = true;
-                    // Keep Dynamic Island always on top - reassert when gaining focus
-                    if (Window.Properties.AlwaysOnTop) Window.Properties.ReassertTopmost();
-
-                    // Notify that focus was gained
+                    Window.Properties.AlwaysOnTop = true; // click island -> on top
                     Window.LogicDispatcher?.Invoke(() => Window.Callbacks.OnFocusGained?.Invoke());
                     return IntPtr.Zero;
-
-                // Fix: keep island visible on top - was going behind other windows on mouse hover
-                case 0x0046: // WM_WINDOWPOSCHANGING - prevent being pushed behind
-                    if (Window.Properties.AlwaysOnTop) Window.Properties.ReassertTopmost();
-                    break;
-                case 0x0200: // WM_MOUSEMOVE
-                case 0x02A0: // WM_NCMOUSEMOVE
-                case 0x0006: // WM_ACTIVATE
-                    if (Window.Properties.AlwaysOnTop) Window.Properties.ReassertTopmost();
-                    break;
 
                 // Client area & focused keyboard and mouse callbacks
                 case (int)WindowMessages.WM_KEYDOWN:
@@ -177,21 +162,18 @@ namespace FenUISharp
                     return IntPtr.Zero;
 
                 case (int)WindowMessages.WM_LBUTTONDOWN:
-                    // Capture the cursor events
                     Win32APIs.SetCapture(Window.hWnd);
-
+                    Window.Properties.AlwaysOnTop = true; // click island -> on top
                     Window.LogicDispatcher.Invoke(() => Window.Callbacks.ClientMouseAction?.Invoke(new MouseInputCode(MouseInputButton.Left, MouseInputState.Down)));
                     return IntPtr.Zero;
                 case (int)WindowMessages.WM_RBUTTONDOWN:
-                    // Capture the cursor events
                     Win32APIs.SetCapture(Window.hWnd);
-
+                    Window.Properties.AlwaysOnTop = true;
                     Window.LogicDispatcher.Invoke(() => Window.Callbacks.ClientMouseAction?.Invoke(new MouseInputCode(MouseInputButton.Right, MouseInputState.Down)));
                     return IntPtr.Zero;
                 case (int)WindowMessages.WM_MBUTTONDOWN:
-                    // Capture the cursor events
                     Win32APIs.SetCapture(Window.hWnd);
-
+                    Window.Properties.AlwaysOnTop = true;
                     Window.LogicDispatcher.Invoke(() => Window.Callbacks.ClientMouseAction?.Invoke(new MouseInputCode(MouseInputButton.Middle, MouseInputState.Down)));
                     return IntPtr.Zero;
                 case (int)WindowMessages.WM_LBUTTONUP:

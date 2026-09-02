@@ -114,7 +114,7 @@ namespace FenUISharp
             SetTargetRefreshrateToMonitorRefreshrate();
             Callbacks.OnWindowEndMove += (x) => SetTargetRefreshrateToMonitorRefreshrate();
             Properties.UseSystemDarkMode = true; // Default to true, can be changed later
-            Properties.AlwaysOnTop = true; // Fix: Dynamic Island must stay visible without minimizing - force topmost on creation
+            // Do not force AlwaysOnTop - user wants click-to-front: click other window -> behind, click island -> on top
 
             WindowThemeManager = new(Resources.GetTheme("default-dark"));
 
