@@ -1,4 +1,4 @@
-﻿name: Release - Easy Download for Noobs
+﻿name: Release - Easy Download 
 
 on:
   workflow_dispatch:
@@ -35,3 +35,4 @@ jobs:
         with:
           files: DynamicISLAND_windows-Portable.zip
           generate_release_notes: true
+
