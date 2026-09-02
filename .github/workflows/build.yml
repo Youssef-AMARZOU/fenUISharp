@@ -1,0 +1,47 @@
+﻿name: Build DynamicISLAND
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-fenUI:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Restore
+        run: dotnet restore fenUI.sln
+      - name: Build fenUI
+        run: dotnet build fenUI.sln -c Release --no-restore
+      - name: Upload fenUI
+        uses: actions/upload-artifact@v4
+        with:
+          name: fenUI
+          path: fenUI/bin/Release/net9.0-windows10.0.19041.0/fenUI.dll
+
+  build-tests:
+    runs-on: windows-latest
+    needs: build-fenUI
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Test
+        run: echo "No tests yet - parallel job OK"
+
+  package:
+    runs-on: windows-latest
+    needs: [build-fenUI, build-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package
+        run: echo "Package DynamicWin portable"
