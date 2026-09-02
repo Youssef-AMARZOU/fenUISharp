@@ -462,16 +462,30 @@ namespace FenUISharp
 
         public void WaitForGpu()
         {
-            _commandQueue?.Signal(_fence, ++_fenceValue);
-
-            if (_fence?.CompletedValue < _fenceValue)
+            try
             {
-                _fence?.SetEventOnCompletion(_fenceValue, _fenceEvent);
-                if (!_fenceEvent?.WaitOne(TimeSpan.FromSeconds(1)) ?? false)
+                _commandQueue?.Signal(_fence, ++_fenceValue);
+
+                if (_fence?.CompletedValue < _fenceValue)
                 {
-                    var reason = DirectCompositionContext.Instance.Device?.DeviceRemovedReason;
-                    FLogger.Error($"GPU TIMEOUT! DeviceRemovedReason: {reason}");
+                    _fence?.SetEventOnCompletion(_fenceValue, _fenceEvent);
+                    if (!_fenceEvent?.WaitOne(TimeSpan.FromSeconds(1)) ?? false)
+                    {
+                        var reason = DirectCompositionContext.Instance.Device?.DeviceRemovedReason;
+                        FLogger.Error($"GPU TIMEOUT! DeviceRemovedReason: {reason} - keeping window alive (always-on-top)");
+                        // Do not terminate - keep window alive until user kills it
+                        _deviceLost = false;
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                // Fix #98: DynamicWin should stay always-on-top until user kills it, not crash on D3D12 fence failure
+                // Previously this propagated as unhandled exception -> process terminated (fenUICrashHandler)
+                FLogger.Error($"WaitForGpu failed (device lost, keeping window alive): {ex.Message}");
+                _deviceLost = true;
+                // Allow retry on next frame via EnsureResourcesCreated / IsDeviceValid check
+                return;
             }
         }
 
