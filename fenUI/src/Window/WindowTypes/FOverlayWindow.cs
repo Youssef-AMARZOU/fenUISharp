@@ -22,6 +22,9 @@ namespace FenUISharp
             
             // Not needed in taskbar
             Properties.VisibleInTaskbar = false;
+
+            // Force native topmost so the overlay always stays above other windows
+            Properties.AlwaysOnTop = true;
         }
 
         public void UpdateWindowMetrics(int activeMonitorDisplay = 0)
@@ -48,8 +51,8 @@ namespace FenUISharp
                 height = monitorRect.bottom - monitorRect.top;
             }
 
-            // Set window position and size
-            Win32APIs.SetWindowPos(hWnd, IntPtr.Zero, x, y, width, height, (uint)SetWindowPosFlags.SWP_NOZORDER | (uint)SetWindowPosFlags.SWP_NOACTIVATE);
+            // Set window position and size (HWND_TOPMOST keeps the overlay above everything)
+            Win32APIs.SetWindowPos(hWnd, new IntPtr(-1) /* HWND_TOPMOST */, x, y, width, height, (uint)SetWindowPosFlags.SWP_NOACTIVATE);
 
             // Trigger buffer invalidation
             FullRedraw();

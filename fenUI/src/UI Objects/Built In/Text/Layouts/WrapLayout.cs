@@ -3,6 +3,7 @@ using FenUISharp.Objects.Text;
 using FenUISharp.Objects.Text.Model;
 using FenUISharp.Objects.Text.Rendering;
 using SkiaSharp;
+using SkiaSharp.HarfBuzz;
 
 namespace FenUISharp.Objects.Text.Layout
 {
@@ -18,6 +19,47 @@ namespace FenUISharp.Objects.Text.Layout
         }
 
         public virtual string[] SplitWords(string content) => Regex.Split(content, @"(\s+|\n)");
+
+        // Arabic / Hebrew / RTL presentation ranges
+        private static bool ContainsRtlScript(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            foreach (char c in text)
+            {
+                if ((c >= 0x0590 && c <= 0x05FF) ||   // Hebrew
+                    (c >= 0x0600 && c <= 0x06FF) ||   // Arabic
+                    (c >= 0x0750 && c <= 0x077F) ||   // Arabic Supplement
+                    (c >= 0x08A0 && c <= 0x08FF) ||   // Arabic Extended-A
+                    (c >= 0xFB50 && c <= 0xFDFF) ||   // Arabic Presentation Forms-A
+                    (c >= 0xFE70 && c <= 0xFEFF))     // Arabic Presentation Forms-B
+                    return true;
+            }
+            return false;
+        }
+
+        // Shapes a word with HarfBuzz so contextual forms (joined Arabic letters)
+        // and ligatures are resolved. Returns null when shaping is unavailable.
+        private static (float width, ushort[] glyphIds, SKPoint[] offsets)? ShapeWord(string word, SKFont font)
+        {
+            if (string.IsNullOrWhiteSpace(word)) return null;
+            try
+            {
+                using var shaper = new SKShaper(font.Typeface);
+                var result = shaper.Shape(word, font);
+                int count = result.Points?.Length ?? 0;
+                if (count == 0) return null;
+
+                var ids = new ushort[count];
+                for (int i = 0; i < count; i++)
+                    ids[i] = (ushort)result.Codepoints[i];
+
+                return (result.Width, ids, result.Points!);
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
         public override List<Glyph> ProcessModel(TextModel model, SKRect bounds)
         {
@@ -150,6 +192,32 @@ namespace FenUISharp.Objects.Text.Layout
 
         private void AddWordToLine(LayoutLine line, string word, SKFont font, TextSpan part)
         {
+            // Complex scripts (Arabic/Hebrew): shape the whole word at once and
+            // treat it as a single unit so joining forms and RTL order are correct.
+            if (ContainsRtlScript(word))
+            {
+                var shaped = ShapeWord(word, font);
+                if (shaped != null)
+                {
+                    var unit = new LayoutCharacter
+                    {
+                        Character = word[0],
+                        Width = shaped.Value.width,
+                        CharacterSpacing = part.CharacterSpacing,
+                        Font = font,
+                        Style = part.Style,
+                        ShapedGlyphIds = shaped.Value.glyphIds,
+                        ShapedGlyphOffsets = shaped.Value.offsets,
+                        ShapedText = word,
+                        IsRtlUnit = true
+                    };
+                    line.Characters.Add(unit);
+                    line.Width += shaped.Value.width + part.CharacterSpacing;
+                    line.IsRtl = true;
+                    return;
+                }
+            }
+
             foreach (char c in word)
             {
                 if (c == '\n' || c == '\r') continue;
@@ -171,6 +239,14 @@ namespace FenUISharp.Objects.Text.Layout
         private void AddWordCharacterByCharacter(List<LayoutLine> lines, string word, SKFont font, 
             TextSpan part, SKRect bounds, FontMetrics fontMetrics)
         {
+            // Never break complex-script words character by character (would destroy
+            // joining). Add them as a single shaped unit instead.
+            if (ContainsRtlScript(word))
+            {
+                AddWordToLine(lines[^1], word, font, part);
+                return;
+            }
+
             var currentLine = lines[^1];
             
             foreach (char c in word)
@@ -270,28 +346,68 @@ namespace FenUISharp.Objects.Text.Layout
             {
                 // Calculate horizontal alignment offset for this line
                 float horizontalOffset = CalculateHorizontalOffset(model.Align.HorizontalAlign, bounds.Width, line.Width);
-                
-                float currentX = horizontalOffset;
+
                 float baselineY = currentY + line.Baseline;
-                
-                foreach (var layoutChar in line.Characters)
+
+                if (line.IsRtl)
                 {
-                    float charHalfWidth = layoutChar.Width / 2;
-                    float spacingHalf = layoutChar.CharacterSpacing / 2;
-                    
-                    var glyph = new Glyph(
-                        layoutChar.Character,
-                        new SKPoint(currentX + charHalfWidth + spacingHalf, baselineY),
-                        new SKSize(1, 1),
-                        new SKPoint(0.5f, 0.5f),
-                        new(layoutChar.Style),
-                        new SKSize(layoutChar.Width, line.LineHeight)
-                    );
-                    
-                    glyphs.Add(glyph);
-                    currentX += layoutChar.Width + layoutChar.CharacterSpacing;
+                    // RTL line: place units from the right edge towards the left.
+                    // Each shaped unit keeps its internal (visual) glyph order.
+                    float currentX = horizontalOffset + line.Width;
+
+                    for (int ci = line.Characters.Count - 1; ci >= 0; ci--)
+                    {
+                        var layoutChar = line.Characters[ci];
+
+                        float unitLeft = currentX - layoutChar.Width - layoutChar.CharacterSpacing / 2;
+                        float centerX = unitLeft + layoutChar.Width / 2;
+
+                        var glyph = new Glyph(
+                            layoutChar.Character,
+                            new SKPoint(centerX, baselineY),
+                            new SKSize(1, 1),
+                            new SKPoint(0.5f, 0.5f),
+                            new(layoutChar.Style),
+                            new SKSize(layoutChar.Width, line.LineHeight)
+                        )
+                        {
+                            ShapedGlyphIds = layoutChar.ShapedGlyphIds,
+                            ShapedGlyphOffsets = layoutChar.ShapedGlyphOffsets,
+                            ShapedText = layoutChar.ShapedText
+                        };
+
+                        glyphs.Add(glyph);
+                        currentX -= layoutChar.Width + layoutChar.CharacterSpacing;
+                    }
                 }
-                
+                else
+                {
+                    float currentX = horizontalOffset;
+
+                    foreach (var layoutChar in line.Characters)
+                    {
+                        float charHalfWidth = layoutChar.Width / 2;
+                        float spacingHalf = layoutChar.CharacterSpacing / 2;
+
+                        var glyph = new Glyph(
+                            layoutChar.Character,
+                            new SKPoint(currentX + charHalfWidth + spacingHalf, baselineY),
+                            new SKSize(1, 1),
+                            new SKPoint(0.5f, 0.5f),
+                            new(layoutChar.Style),
+                            new SKSize(layoutChar.Width, line.LineHeight)
+                        )
+                        {
+                            ShapedGlyphIds = layoutChar.ShapedGlyphIds,
+                            ShapedGlyphOffsets = layoutChar.ShapedGlyphOffsets,
+                            ShapedText = layoutChar.ShapedText
+                        };
+
+                        glyphs.Add(glyph);
+                        currentX += layoutChar.Width + layoutChar.CharacterSpacing;
+                    }
+                }
+
                 currentY += line.LineHeight;
             }
             
@@ -327,6 +443,7 @@ namespace FenUISharp.Objects.Text.Layout
             public float Baseline { get; set; } = 0;
             public float Ascent { get; set; } = 0;
             public float Descent { get; set; } = 0;
+            public bool IsRtl { get; set; } = false;
 
             public void UpdateMetrics(FontMetrics metrics)
             {
@@ -344,6 +461,10 @@ namespace FenUISharp.Objects.Text.Layout
             public float CharacterSpacing { get; set; }
             public SKFont Font { get; set; }
             public TextStyle Style { get; set; }
+            public ushort[]? ShapedGlyphIds { get; set; }
+            public SKPoint[]? ShapedGlyphOffsets { get; set; }
+            public string? ShapedText { get; set; }
+            public bool IsRtlUnit { get; set; }
         }
 
         private class FontMetrics

@@ -75,7 +75,8 @@ namespace FenUISharp.Objects.Text.Rendering
                 using (var blur = SKImageFilter.CreateBlur(glyph.Style.BlurRadius, glyph.Style.BlurRadius))
                 using (var font = CreateFont(model.Typeface, glyph.Style))
                 {
-                    if (glyph.Style.BlurRadius > 0) fontPaint.ImageFilter = blur;
+                    // Crisp text: never apply per-glyph blur
+                    fontPaint.ImageFilter = null;
 
                     if (glyph.Style.Opacity < 1 && glyph.Style.Opacity >= 0)
                     {
@@ -89,20 +90,36 @@ namespace FenUISharp.Objects.Text.Rendering
                         using (var colorFilter = SKColorFilter.CreateColorMatrix(alphaMatrix))
                         using (var opacityFilter = SKImageFilter.CreateColorFilter(colorFilter))
                         {
-                            if (blur != null)
-                            {
-                                using (var compose = SKImageFilter.CreateCompose(opacityFilter, blur))
-                                    fontPaint.ImageFilter = compose;
-                            }
-                            else
-                            {
-                                fontPaint.ImageFilter = opacityFilter;
-                            }
+                            fontPaint.ImageFilter = opacityFilter;
                         }
                     }
 
                     var position = glyph.Position;
-                    canvas.DrawText(glyph.Character.ToString(), position, SKTextAlign.Center, font, fontPaint);
+
+                    if (glyph.ShapedGlyphIds != null && glyph.ShapedGlyphIds.Length > 0)
+                    {
+                        // Complex-script run (Arabic/Hebrew): draw the pre-shaped
+                        // glyph run with correct joining and RTL visual order.
+                        float runLeft = position.X - glyph.Size.Width / 2;
+                        try
+                        {
+                            using var builder = new SKTextBlobBuilder();
+                            var run = builder.AllocatePositionedRun(font, glyph.ShapedGlyphIds.Length);
+                            run.SetGlyphs(glyph.ShapedGlyphIds);
+                            if (glyph.ShapedGlyphOffsets != null)
+                                run.SetPositions(glyph.ShapedGlyphOffsets);
+                            using var blob = builder.Build();
+                            canvas.DrawText(blob, runLeft, position.Y, fontPaint);
+                        }
+                        catch
+                        {
+                            canvas.DrawText(glyph.Character.ToString(), position, SKTextAlign.Center, font, fontPaint);
+                        }
+                    }
+                    else
+                    {
+                        canvas.DrawText(glyph.Character.ToString(), position, SKTextAlign.Center, font, fontPaint);
+                    }
                 }
 
                 if (glyph.Style.Underlined)

@@ -54,6 +54,10 @@ namespace FenUISharp
         // Might be a problem later on, but keep for now
         private ulong _fenceValue;
 
+        // Only true after the constructor completed every initialization step
+        // successfully. Prevents GPU fence access on partially created objects.
+        private bool _fullyInitialized;
+
         public ColorSpaceType ColorSpace = ColorSpaceType.RgbFullG22NoneP709;
         public uint BufferCount { get; } = 2;
 
@@ -127,9 +131,11 @@ namespace FenUISharp
                 InitFence();
 
                 FLogger.Log<DirectCompositionContext>("DirectCompositionContext initialization completed!");
+                _fullyInitialized = true;
             }
             catch (Exception ex)
             {
+                _fullyInitialized = false;
                 FLogger.Log<DirectCompositionContext>($"Error in DirectCompositionContext constructor: {ex}");
                 try { Dispose(); } catch { }
                 throw;
@@ -431,6 +437,15 @@ namespace FenUISharp
 
         internal void WaitForGpu()
         {
+            // Hard guard: a partially initialized command queue has a dangling native
+            // pointer - calling Signal on it raises a non-catchable native access
+            // violation (fatal 0xC0000005). Only wait when initialization fully succeeded.
+            if (!_fullyInitialized)
+            {
+                FLogger.Log<DirectCompositionContext>("WaitForGpu skipped: context not fully initialized.");
+                return;
+            }
+
             // If not found, skip
             if (CommandQueue == null || Fence == null || FenceEvent == null)
             {

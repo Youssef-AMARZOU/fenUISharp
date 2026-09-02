@@ -1,4 +1,4 @@
-using FenUISharp.Logging;
+﻿using FenUISharp.Logging;
 using FenUISharp.Mathematics;
 using FenUISharp.Objects;
 using SkiaSharp;
@@ -59,123 +59,30 @@ namespace FenUISharp.Materials
         // TODO: Causes crashes, engine execution errors
         protected override void Draw(SKCanvas targetCanvas, SKPath path, UIObject caller, SKPaint paint)
         {
-            using var windowArea = GrabPassFunction();
-            if (windowArea == null) return;
-            SKImage? blurredWindowArea = null;
-
-            {
-                using var blurSurf = FContext.GetCurrentWindow().SkiaDirectCompositionContext?.CreateAdditional(windowArea.Info);
-
-                if (blurSurf == null) return;
-
-                using var blurCanv = blurSurf.SkiaSurface.Canvas;
-
-                var bRadius = BlurRadius();
-                using var blur = SKImageFilter.CreateBlur(bRadius / 1.25f, bRadius / 1.25f);
-                using var blurPaint = new SKPaint { IsAntialias = true, ImageFilter = blur };
-                blurCanv.DrawImage(windowArea, 0, 0, blurPaint);
-
-                blurredWindowArea = blurSurf.SkiaSurface.Snapshot();
-            }
-
-            // Compositor.EnableDump = true;
-            // Compositor.Dump(windowArea, "grab_pass_glass");
-
-            // Create displacement map
-            path.GetBounds(out SKRect pathBounds);
-            // pathBounds = targetCanvas.TotalMatrix.MapRect(pathBounds);
-
-            // Skip if bounds are zero on any axis
-            if (pathBounds.Width == 0 || pathBounds.Height == 0) return;
-
-            // Make sure glass has enough padding
-            caller.Padding.SetStaticState(35, 1);
-
-            SKImageInfo skImageInfo = new((int)MathF.Ceiling(pathBounds.Width / DisplacementMapDownscale), (int)MathF.Ceiling(pathBounds.Height / DisplacementMapDownscale));
-            using var displacementSurface = FContext.GetCurrentWindow().SkiaDirectCompositionContext?.CreateAdditional(skImageInfo);
-
-            if (displacementSurface == null) return;
-
-            using var displacementMapCanvas = displacementSurface.SkiaSurface.Canvas;
-            int falloff = Distance();
-
-            Vector2 pathOffsetAdjustment = new(-pathBounds.Left, -pathBounds.Top);
-            displacementMapCanvas.Translate(pathOffsetAdjustment.x, pathOffsetAdjustment.y);
-
-            using var displacementPaint = new SKPaint
-            {
-                IsAntialias = true,
-                StrokeCap = SKStrokeCap.Round,
-                StrokeJoin = SKStrokeJoin.Round,
-                // ImageFilter = blur
-            };
-
-            displacementPaint.Style = SKPaintStyle.Fill;
-            displacementPaint.Color = SKColors.White;
-            displacementMapCanvas.DrawPath(path, displacementPaint);
-            displacementPaint.Style = SKPaintStyle.Stroke;
-
-            for (int i = falloff; i >= 1; i--)
-            {
-                float alpha = (float)i / (float)falloff;
-                displacementPaint.Color = new SKColor((byte)(alpha * 255), (byte)(alpha * 255), (byte)(alpha * 255), 255);
-                displacementPaint.StrokeWidth = i * 2;
-                displacementMapCanvas.DrawPath(path, displacementPaint);
-            }
-
-            // Get displacement map
-            using SKShader displacementMap =
-                displacementSurface.SkiaSurface.Snapshot().ToShader(SKShaderTileMode.Decal, SKShaderTileMode.Decal, new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.Nearest));
-            using SKShader? masterShader = CreateShader(
-                displacementMap,
-                blurredWindowArea.ToShader(SKShaderTileMode.Decal, SKShaderTileMode.Decal, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear)),
-                pathBounds,
-                caller,
-                BaseColor(),
-                pathOffsetAdjustment
-            );
-
+            // Crisp solid style (macOS-like dark cards): skip the displacement glass
+            // and blur entirely so surfaces stay sharp and readable.
             int unmodified = targetCanvas.Save();
             targetCanvas.ClipPath(path, antialias: true);
 
-            paint.Shader = masterShader;
-
-            var mainBRadius = BlurRadius();
-            using var mainBlur = SKImageFilter.CreateBlur(mainBRadius / 4, mainBRadius / 4);
-            paint.ImageFilter = mainBlur;
-
-            // paint.Color = BaseColor();
-            // targetCanvas.DrawPath(path, paint);
-
-            // using (var b = SKImageFilter.CreateBlur(2, 2))
-            //     paint.ImageFilter = b;
-
-            var displayArea = caller.Shape.SurfaceDrawRect;
-            // targetCanvas.DrawImage(windowArea, displayArea, paint);
+            paint.Shader = null;
+            paint.ImageFilter = null;
+            paint.Color = BaseColor().WithAlpha(242);
             targetCanvas.DrawPath(path, paint);
 
-            var highlightPaint = new SKPaint
+            // Subtle inner border for definition
+            using (var strokePaint = new SKPaint
             {
-                Color = paint.Color,
-                // BlendMode = SKBlendMode.SoftLight,
+                IsAntialias = true,
                 IsStroke = true,
-                StrokeWidth = 3,
-                IsAntialias = true
-            };
-            using (var gradientShader = SKShader.CreateLinearGradient(
-                                new SKPoint(RMath.Lerp(pathBounds.Left, pathBounds.MidX, 0.4f), pathBounds.Top),
-                                new SKPoint(RMath.Lerp(pathBounds.Right, pathBounds.MidX, 0.4f), pathBounds.Bottom),
-                                new[] { Highlight(), SKColors.White.WithAlpha(0), Highlight() },
-                                null,
-                                SKShaderTileMode.Clamp))
-                highlightPaint.Shader = gradientShader;
-            targetCanvas.DrawPath(path, highlightPaint);
+                StrokeWidth = 1.5f,
+                Color = SKColors.White.WithAlpha(26)
+            })
+            {
+                targetCanvas.DrawPath(path, strokePaint);
+            }
 
-            // Restore
             targetCanvas.RestoreToCount(unmodified);
-
             caller.Invalidate(UIObject.Invalidation.SurfaceDirty);
-            blurredWindowArea.Dispose();
         }
 
         SKShader? CreateShader(SKShader displacementMap, SKShader grabPass, SKRect bounds, UIObject caller, SKColor baseColorMix, Vector2 off)

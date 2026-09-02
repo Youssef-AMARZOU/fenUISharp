@@ -15,7 +15,8 @@
         </PackageReference>
 
         <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
-        <PackageReference Include="SkiaSharp" Version="3.119.0" />
+        <PackageReference Include="SkiaSharp" Version="3.119.1" />
+        <PackageReference Include="SkiaSharp.HarfBuzz" Version="3.119.1" />
         <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
         <PackageReference Include="Vortice.Direct3D12" Version="3.6.2" />
         <PackageReference Include="Vortice.DirectComposition" Version="3.6.2" />

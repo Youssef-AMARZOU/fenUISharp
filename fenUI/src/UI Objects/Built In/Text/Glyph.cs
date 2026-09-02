@@ -13,6 +13,13 @@ namespace FenUISharp.Objects.Text
         public SKSize Scale { get; set; }
         public TextStyle Style { get; set; }
 
+        // Complex-script shaping support (Arabic, Hebrew, ...).
+        // When ShapedGlyphIds is set, the renderer draws the whole pre-shaped run
+        // instead of the single Character.
+        public ushort[]? ShapedGlyphIds { get; set; }
+        public SKPoint[]? ShapedGlyphOffsets { get; set; } // relative to the run's left edge / baseline
+        public string? ShapedText { get; set; }
+
         public SKRect Bounds => SKRect.Create(Position.X - Size.Width / 2, Position.Y - Size.Height, Size.Width, Size.Height);
 
         public Glyph(char character, SKPoint position, SKSize scale, SKPoint anchor, TextStyle style, SKSize size)
