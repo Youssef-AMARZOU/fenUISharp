@@ -28,11 +28,31 @@ namespace FenUISharp
             set
             {
                 _alwaysOnTop = value;
-                Win32APIs.SetWindowPos(Window.hWnd, _alwaysOnTop ? -1 /* HWND_TOPMOST */ : -2 /* HWND_NOTOPMOST */, 0, 0, 0, 0, (uint)SetWindowPosFlags.SWP_NOMOVE | (uint)SetWindowPosFlags.SWP_NOSIZE);
+                // Fix: keep Dynamic Island always on top even on mouse hover - was going behind
+                // Use HWND_TOPMOST with NOACTIVATE to stay above taskbar/browser without stealing focus
+                var flags = (uint)SetWindowPosFlags.SWP_NOMOVE | (uint)SetWindowPosFlags.SWP_NOSIZE | (uint)SetWindowPosFlags.SWP_NOACTIVATE | (uint)SetWindowPosFlags.SWP_SHOWWINDOW;
+                Win32APIs.SetWindowPos(Window.hWnd, _alwaysOnTop ? -1 /* HWND_TOPMOST */ : -2 /* HWND_NOTOPMOST */, 0, 0, 0, 0, flags);
+                // Ensure WS_EX_TOPMOST ex-style for true always-on-top across workspace changes
+                try
+                {
+                    int exStyle = Win32APIs.GetWindowLong(Window.hWnd, (int)WindowLongs.GWL_EXSTYLE);
+                    if (_alwaysOnTop) exStyle |= 0x00000008 /* WS_EX_TOPMOST */;
+                    else exStyle &= ~0x00000008;
+                    Win32APIs.SetWindowLong(Window.hWnd, (int)WindowLongs.GWL_EXSTYLE, exStyle);
+                } catch { }
+                // Re-assert after a tick to beat other topmost windows (browsers)
+                if (_alwaysOnTop) ReassertTopmost();
             }
             get => _alwaysOnTop;
         }
-        private bool _alwaysOnTop = false;
+        private bool _alwaysOnTop = true; // Default true: Dynamic Island must be visible without minimizing other windows
+
+        public void ReassertTopmost()
+        {
+            if (!_alwaysOnTop) return;
+            var flags = (uint)SetWindowPosFlags.SWP_NOMOVE | (uint)SetWindowPosFlags.SWP_NOSIZE | (uint)SetWindowPosFlags.SWP_NOACTIVATE | (uint)SetWindowPosFlags.SWP_SHOWWINDOW;
+            Win32APIs.SetWindowPos(Window.hWnd, -1 /* HWND_TOPMOST */, 0, 0, 0, 0, flags);
+        }
 
         public bool ExcludeFromAeroPeek { set { int val = value ? 1 : 0; Win32APIs.DwmSetWindowAttribute(Window.hWnd, 12 /* DWMWA_EXCLUDED_FROM_PEEK */, ref val, sizeof(int)); } }
 

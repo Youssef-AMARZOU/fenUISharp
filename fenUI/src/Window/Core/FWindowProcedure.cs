@@ -150,10 +150,22 @@ namespace FenUISharp
                 case (int)WindowMessages.WM_SETFOCUS:
                     Window._isDirty = true;
                     Window.Properties._isFocused = true;
+                    // Keep Dynamic Island always on top - reassert when gaining focus
+                    if (Window.Properties.AlwaysOnTop) Window.Properties.ReassertTopmost();
 
                     // Notify that focus was gained
                     Window.LogicDispatcher?.Invoke(() => Window.Callbacks.OnFocusGained?.Invoke());
                     return IntPtr.Zero;
+
+                // Fix: keep island visible on top - was going behind other windows on mouse hover
+                case 0x0046: // WM_WINDOWPOSCHANGING - prevent being pushed behind
+                    if (Window.Properties.AlwaysOnTop) Window.Properties.ReassertTopmost();
+                    break;
+                case 0x0200: // WM_MOUSEMOVE
+                case 0x02A0: // WM_NCMOUSEMOVE
+                case 0x0006: // WM_ACTIVATE
+                    if (Window.Properties.AlwaysOnTop) Window.Properties.ReassertTopmost();
+                    break;
 
                 // Client area & focused keyboard and mouse callbacks
                 case (int)WindowMessages.WM_KEYDOWN:
