@@ -230,7 +230,21 @@ namespace FenUISharp.WinFeatures
         {
             try
             {
-                var info = await currentSession?.TryGetMediaPropertiesAsync();
+                // Session may be null or die between checks - awaiting a null
+                // IAsyncOperation throws ArgumentNullException which, on this
+                // background path, would terminate the whole process.
+                if (currentSession == null)
+                {
+                    cachedInfo.thumbnail = null;
+                    return;
+                }
+
+                var info = await currentSession.TryGetMediaPropertiesAsync();
+                if (info == null)
+                {
+                    cachedInfo.thumbnail = null;
+                    return;
+                }
 
                 var thumbnail = info.Thumbnail;
                 if (thumbnail != null)
@@ -248,7 +262,7 @@ namespace FenUISharp.WinFeatures
                 else
                     cachedInfo.thumbnail = null;
             }
-            catch (COMException _) { return; }
+            catch (Exception) { return; }
         }
 
         private const int THUMBNAIL_SIZE = 512;

@@ -59,23 +59,41 @@ namespace FenUISharp.Materials
         // TODO: Causes crashes, engine execution errors
         protected override void Draw(SKCanvas targetCanvas, SKPath path, UIObject caller, SKPaint paint)
         {
-            // Crisp solid style (macOS-like dark cards): skip the displacement glass
-            // and blur entirely so surfaces stay sharp and readable.
+            // Frosted transparent glass: blurred backdrop + translucent tint.
+            // No displacement warp so text stays crisp while the wallpaper
+            // shows through the glass.
             int unmodified = targetCanvas.Save();
             targetCanvas.ClipPath(path, antialias: true);
 
-            paint.Shader = null;
-            paint.ImageFilter = null;
-            paint.Color = BaseColor().WithAlpha(242);
-            targetCanvas.DrawPath(path, paint);
+            using var windowArea = GrabPassFunction();
+            if (windowArea != null)
+            {
+                var bRadius = Math.Max(BlurRadius(), 22f);
+                using var blur = SKImageFilter.CreateBlur(bRadius, bRadius);
+                using var blurPaint = new SKPaint { IsAntialias = true, ImageFilter = blur };
+                targetCanvas.DrawImage(windowArea, 0, 0, blurPaint);
 
-            // Subtle inner border for definition
+                // Translucent tint over the blurred backdrop
+                using var tint = new SKPaint { IsAntialias = true };
+                tint.Color = BaseColor().WithAlpha(140);
+                targetCanvas.DrawPath(path, tint);
+            }
+            else
+            {
+                // No grab pass available: fall back to a translucent solid
+                paint.Shader = null;
+                paint.ImageFilter = null;
+                paint.Color = BaseColor().WithAlpha(185);
+                targetCanvas.DrawPath(path, paint);
+            }
+
+            // Subtle glass highlight border
             using (var strokePaint = new SKPaint
             {
                 IsAntialias = true,
                 IsStroke = true,
                 StrokeWidth = 1.5f,
-                Color = SKColors.White.WithAlpha(26)
+                Color = SKColors.White.WithAlpha(60)
             })
             {
                 targetCanvas.DrawPath(path, strokePaint);
