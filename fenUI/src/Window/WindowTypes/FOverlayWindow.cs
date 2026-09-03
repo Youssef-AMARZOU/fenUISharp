@@ -87,24 +87,15 @@ namespace FenUISharp
                             // to the front (and expands it), clicking anywhere else sends
                             // it behind. The click itself passes through the transparent
                             // parts and reaches the app behind.
+                            // NOTE: while the mouse is held at the roof (summon gesture)
+                            // the click path is skipped entirely - the GetAsyncKeyState
+                            // LSB is unreliable and spurious edges would cancel the summon.
                             short key = Win32APIs.GetAsyncKeyState(0x01); // VK_LBUTTON
                             bool down = (key & 0x8000) != 0;
                             bool pressed = (key & 0x0001) != 0 || (down && !prevDown); // LSB = pressed since last call
                             prevDown = down;
-                            if (pressed)
-                            {
-                                // Click landed on one of OUR windows (pill, expanded
-                                // panel, popover) -> island in front. Landed on any other
-                                // app (the transparent parts let these clicks through)
-                                // -> island behind.
-                                uint hitPid = 0;
-                                Win32APIs.GetWindowThreadProcessId(Win32APIs.WindowFromPoint(cpt), out hitPid);
-                                bool onIsland = hitPid == (uint)System.Environment.ProcessId;
-                                IslandPinnedTop = onIsland;
-                                IslandExpanded = onIsland;
-                                if (!onIsland) lastNearIsland = DateTime.Now;
-                            }
-                            else if (atRoof && !down)
+
+                            if (atRoof && !down)
                             {
                                 // Mouse held against the roof summons the island
                                 // (ignored while dragging so window-maximize drags don't trigger it)
@@ -113,7 +104,23 @@ namespace FenUISharp
                                     IslandPinnedTop = true;
                             }
                             else
+                            {
                                 roofTicks = 0;
+
+                                if (pressed)
+                                {
+                                    // Click landed on one of OUR windows (pill, expanded
+                                    // panel, popover) -> island in front. Landed on any other
+                                    // app (the transparent parts let these clicks through)
+                                    // -> island behind.
+                                    uint hitPid = 0;
+                                    Win32APIs.GetWindowThreadProcessId(Win32APIs.WindowFromPoint(cpt), out hitPid);
+                                    bool onIsland = hitPid == (uint)System.Environment.ProcessId;
+                                    IslandPinnedTop = onIsland;
+                                    IslandExpanded = onIsland;
+                                    if (!onIsland) lastNearIsland = DateTime.Now;
+                                }
+                            }
 
                             // Foreground moved to another window -> island behind
                             IntPtr fg = Win32APIs.GetForegroundWindow();
