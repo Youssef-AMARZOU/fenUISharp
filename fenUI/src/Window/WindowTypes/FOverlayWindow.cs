@@ -40,6 +40,7 @@ namespace FenUISharp
             var enforcer = new System.Threading.Thread(() =>
             {
                 bool prevDown = false;
+                DateTime lastNearIsland = DateTime.Now;
                 while (true)
                 {
                     try
@@ -49,13 +50,23 @@ namespace FenUISharp
                         {
                             var cpt = default(Native.POINT);
                             bool atRoof = false;
+                            bool nearIsland = false;
                             if (Win32APIs.GetCursorPos(out cpt))
                             {
                                 int screenW = Win32APIs.GetSystemMetrics(0);
                                 // Summon gesture: push the mouse against the very top edge
                                 // at the MIDDLE of the screen only (the notch area).
                                 atRoof = cpt.y <= 2 && Math.Abs(cpt.x - screenW / 2) < 120;
+                                // "Near the island" = the notch/pill zone
+                                nearIsland = cpt.y < 42 && Math.Abs(cpt.x - screenW / 2) < 300;
                             }
+
+                            // Auto-hide: pinned island goes behind all windows once the
+                            // mouse has stayed away from it for 5 seconds.
+                            if (nearIsland)
+                                lastNearIsland = DateTime.Now;
+                            else if (IslandPinnedTop && (DateTime.Now - lastNearIsland).TotalSeconds >= 5)
+                                IslandPinnedTop = false;
 
                             // Physical click edge: clicking the island's pill area pins it
                             // to the front, clicking anywhere else sends it behind.
