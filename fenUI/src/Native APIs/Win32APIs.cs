@@ -309,6 +309,8 @@ namespace FenUISharp.Native
         internal static extern short GetAsyncKeyState(int vKey);
         [DllImport("user32.dll")]
         internal static extern IntPtr WindowFromPoint(POINT Point);
+        [DllImport("user32.dll")]
+        internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
         [DllImport("user32.dll")]
         internal static extern int GetSystemMetrics(int nIndex);

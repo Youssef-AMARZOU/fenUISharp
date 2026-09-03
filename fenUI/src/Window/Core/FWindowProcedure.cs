@@ -310,30 +310,10 @@ namespace FenUISharp
                 // Island z-order enforcement: rewrite the pending WINDOWPOS so the
                 // overlay always lands in the band we want, no matter how often the
                 // host app asserts its own z-order (it does, every frame).
+                // The desired state itself is computed by the FOverlayWindow enforcer.
                 case (int)WindowMessages.WM_WINDOWPOSCHANGING: // 0x0046
                     if (Window is FOverlayWindow)
                     {
-                        // Unpin when the foreground moves to another window
-                        IntPtr fg = Win32APIs.GetForegroundWindow();
-                        if (fg != FOverlayWindow.LastForeground)
-                        {
-                            if (fg != Window.hWnd)
-                                FOverlayWindow.IslandPinnedTop = false;
-                            FOverlayWindow.LastForeground = fg;
-                        }
-
-                        // Hovering the notch zone (top-centre) summons the island
-                        try
-                        {
-                            if (Win32APIs.GetCursorPos(out var cpt))
-                            {
-                                int screenW = Win32APIs.GetSystemMetrics(0);
-                                if (cpt.y < 42 && Math.Abs(cpt.x - screenW / 2) < 220)
-                                    FOverlayWindow.IslandPinnedTop = true;
-                            }
-                        }
-                        catch { }
-
                         WINDOWPOS wp = (WINDOWPOS)Marshal.PtrToStructure(lParam, typeof(WINDOWPOS))!;
                         wp.hwndInsertAfter = FOverlayWindow.IslandPinnedTop ? new IntPtr(-1) /* HWND_TOPMOST */ : new IntPtr(-2) /* HWND_NOTOPMOST */;
                         wp.flags &= ~0x4u; // clear SWP_NOZORDER so our insertAfter applies

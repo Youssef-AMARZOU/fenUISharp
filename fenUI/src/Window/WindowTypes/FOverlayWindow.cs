@@ -34,6 +34,9 @@ namespace FenUISharp
             // Click-to-front enforcer thread: applies the desired z-order band a few
             // times per second. WM_WINDOWPOSCHANGING rewrites every pending position
             // (including the host app's own per-frame assertions) to match this state.
+            //
+            // Summon gesture: push the mouse against the very top edge of the screen
+            // ("the roof"). A plain hover near the top does NOT summon.
             var enforcer = new System.Threading.Thread(() =>
             {
                 bool prevDown = false;
@@ -44,30 +47,37 @@ namespace FenUISharp
                         var h = hWnd;
                         if (h != IntPtr.Zero)
                         {
-                            bool inZone = false;
-                            if (Win32APIs.GetCursorPos(out var cpt))
+                            var cpt = default(Native.POINT);
+                            bool atRoof = false;
+                            if (Win32APIs.GetCursorPos(out cpt))
                             {
                                 int screenW = Win32APIs.GetSystemMetrics(0);
-                                inZone = cpt.y < 42 && Math.Abs(cpt.x - screenW / 2) < 220;
+                                // Summon gesture: push the mouse against the very top edge
+                                // at the MIDDLE of the screen only (the notch area).
+                                atRoof = cpt.y <= 2 && Math.Abs(cpt.x - screenW / 2) < 120;
                             }
 
-                            // Physical click edge: click on the island pins it to the
-                            // front, clicking anywhere else sends it behind.
+                            // Physical click edge: clicking the island's pill area pins it
+                            // to the front, clicking anywhere else sends it behind.
                             short key = Win32APIs.GetAsyncKeyState(0x01); // VK_LBUTTON
                             bool down = (key & 0x8000) != 0;
                             bool pressed = (key & 0x0001) != 0 || (down && !prevDown); // LSB = pressed since last call
                             prevDown = down;
                             if (pressed)
                             {
-                                // Click decision is final for this tick
-                                if (inZone && Win32APIs.WindowFromPoint(cpt) == h)
-                                    IslandPinnedTop = true;
-                                else
-                                    IslandPinnedTop = false;
+                                // Only a click inside the notch/pill zone that hits one of
+                                // OUR windows (overlay or its popovers) pins the island.
+                                int screenW = Win32APIs.GetSystemMetrics(0);
+                                bool inPillZone = cpt.y < 42 && Math.Abs(cpt.x - screenW / 2) < 300;
+                                uint hitPid = 0;
+                                Win32APIs.GetWindowThreadProcessId(Win32APIs.WindowFromPoint(cpt), out hitPid);
+                                bool onIslandPill = inPillZone && hitPid == (uint)System.Environment.ProcessId;
+                                IslandPinnedTop = onIslandPill;
                             }
-                            else if (inZone)
+                            else if (atRoof && !down)
                             {
-                                // Hovering the notch summons the island (when no click decision)
+                                // Mouse pressed against the roof summons the island
+                                // (ignored while dragging so window-maximize drags don't trigger it)
                                 IslandPinnedTop = true;
                             }
 
