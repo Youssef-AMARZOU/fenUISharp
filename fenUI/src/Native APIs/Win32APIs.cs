@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Text;
 
 namespace FenUISharp.Native
@@ -171,7 +171,7 @@ namespace FenUISharp.Native
     public struct BITMAPINFO
     {
         public BITMAPINFOHEADER bmiHeader;
-        public RGBQUAD bmiColors; // only one here, we don’t need a full array for 32bpp
+        public RGBQUAD bmiColors; // only one here, we donâ€™t need a full array for 32bpp
     }
 
     public static class CombineModes
@@ -303,6 +303,12 @@ namespace FenUISharp.Native
 
         [DllImport("user32.dll")]
         internal static extern bool GetCursorPos(out POINT lpPoint);
+        [DllImport("user32.dll")]
+        internal static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")]
+        internal static extern short GetAsyncKeyState(int vKey);
+        [DllImport("user32.dll")]
+        internal static extern IntPtr WindowFromPoint(POINT Point);
 
         [DllImport("user32.dll")]
         internal static extern int GetSystemMetrics(int nIndex);
@@ -609,6 +615,18 @@ namespace FenUISharp.Native
     {
         public int x;
         public int y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct WINDOWPOS
+    {
+        public IntPtr hwnd;
+        public IntPtr hwndInsertAfter;
+        public int x;
+        public int y;
+        public int cx;
+        public int cy;
+        public uint flags;
     }
 
     [StructLayout(LayoutKind.Sequential)]

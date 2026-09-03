@@ -27,6 +27,10 @@ namespace FenUISharp
             set
             {
                 _alwaysOnTop = value;
+                // Overlay z-order (the island) is managed externally via a click-to-front
+                // watcher: ignore the host app's own topmost/notopmost toggles so they
+                // don't fight the watcher every frame.
+                if (Window is FOverlayWindow) return;
                 Win32APIs.SetWindowPos(Window.hWnd, _alwaysOnTop ? -1 /* HWND_TOPMOST */ : -2 /* HWND_NOTOPMOST */, 0, 0, 0, 0, (uint)SetWindowPosFlags.SWP_NOMOVE | (uint)SetWindowPosFlags.SWP_NOSIZE);
             }
             get => _alwaysOnTop;
