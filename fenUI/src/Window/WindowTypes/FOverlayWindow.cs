@@ -46,6 +46,7 @@ namespace FenUISharp
                 DateTime lastNearIsland = DateTime.Now;
                 int roofTicks = 0;
                 int tick = 0;
+                bool lastAppliedBand = false;
                 try { System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dw_enforcer_alive.txt"), "started " + DateTime.Now.ToString("HH:mm:ss.fff")); } catch { }
                 while (true)
                 {
@@ -137,8 +138,15 @@ namespace FenUISharp
                             if (!IslandPinnedTop)
                                 IslandExpanded = false;
 
-                            Win32APIs.SetWindowPos(h, IslandPinnedTop ? new IntPtr(-1) : new IntPtr(-2), 0, 0, 0, 0,
-                                (uint)(SetWindowPosFlags.SWP_NOMOVE | SetWindowPosFlags.SWP_NOSIZE | SetWindowPosFlags.SWP_NOACTIVATE));
+                            // Only push a z-order change when the desired band differs
+                            // from the last applied one - constant SetWindowPos calls
+                            // starve the render loop with WM_WINDOWPOSCHANGING churn.
+                            if (IslandPinnedTop != lastAppliedBand)
+                            {
+                                Win32APIs.SetWindowPos(h, IslandPinnedTop ? new IntPtr(-1) : new IntPtr(-2), 0, 0, 0, 0,
+                                    (uint)(SetWindowPosFlags.SWP_NOMOVE | SetWindowPosFlags.SWP_NOSIZE | SetWindowPosFlags.SWP_NOACTIVATE));
+                                lastAppliedBand = IslandPinnedTop;
+                            }
                         }
                     }
                     catch { }
